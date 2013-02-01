@@ -25,9 +25,20 @@ class YiiDropbox extends CApplicationComponent {
     protected $_oauthToken;
     protected $_oauthTokenSecret;
 
+    protected $_errorCode;
+    protected $_errorMessage;
+
     public function init() {
         $this->_oauth = new OAuth($this->appKey, $this->appSecret, OAUTH_SIG_METHOD_HMACSHA1, OAUTH_AUTH_TYPE_URI);
         $this->_oauth->enableDebug();
+    }
+
+    public function getErrorCode() {
+        return $this->_errorCode;
+    }
+
+    public function getErrorMessage() {
+        return $this->_errorMessage;
     }
 
     public function getRequestToken() {
@@ -63,7 +74,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Получаем информацию об аккаунте
+     * Get account information
      * @return mixed
      */
     public function getAccountInfo() {
@@ -72,10 +83,10 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Получаем содержимое файла
+     * Get file content
      *
      * @param string $path path
-     * @param string $root Use this to override the default root path (sandbox/dropbox)
+     * @param string $root
      * @return string
      */
     public function getFile($path = '', $root = false) {
@@ -88,7 +99,8 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Передаем файл в дропбокс
+     * Send file to Dropbox
+     *
      * @param $path
      * @param $file
      * @param null $root
@@ -126,7 +138,8 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Копируем файл
+     * Copy file
+     *
      * @param $from
      * @param $to
      * @param null $root
@@ -142,7 +155,8 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Создаем папку
+     * Create folder
+     *
      * @param $path
      * @param null $root
      * @return mixed
@@ -158,7 +172,8 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Удаляем файл
+     * Delete file or directory
+     *
      * @param $path
      * @param null $root
      * @return mixed
@@ -172,7 +187,8 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Перемещаем файл
+     * Move file
+     *
      * @param $from
      * @param $to
      * @param null $root
@@ -188,7 +204,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Получаем метаданные файла
+     * Get files metadata
      *
      * @param $path
      * @param bool $list
@@ -230,7 +246,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Получаем превьюшки
+     * Get Thumbnail
      *
      * @param $path
      * @param string $size
@@ -248,9 +264,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Поиск
-     *
-     * Возвращает метаданные всех файлов и директорий, совпадающих с запросом
+     * Search
      *
      * @param string $query
      * @param string $root
@@ -267,7 +281,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Создает и возвращает ссылку на расшаренные файлы
+     * Create and return share link
      *
      * @param type $path
      * @param type $root
@@ -282,7 +296,7 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Возвращает ссылку непосредственно на файл
+     * Return link to file
      *
      * @param type $path
      * @param type $root
@@ -297,10 +311,7 @@ class YiiDropbox extends CApplicationComponent {
 
     }
 
-    /**
-     * Создает и возвращает copy_ref. Эта ссылка строка может быть использована для копирования файла в
-     * Dropbox другого пользователя, передав ее в качестве параметра на from_copy_ref / fileops / копия.
-     *
+    /** 
      * @param type $path
      * @param type $root
      * @return type
@@ -315,7 +326,6 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Метод используется для создания составного POST запроса для отправки файлов
      * @param $uri
      * @param $file
      * @param $filename
@@ -344,7 +354,6 @@ class YiiDropbox extends CApplicationComponent {
     }
 
     /**
-     * Разбираем URL и возвращаем тело ответа
      * @param String $uri
      * @param array $arguments
      * @param string $method
@@ -364,6 +373,7 @@ class YiiDropbox extends CApplicationComponent {
         } catch (CException $e) {
 
             $lastResponseInfo = $this->_oauth->getLastResponseInfo();
+            $this->_errorCode = $lastResponseInfo['http_code'];
             switch($lastResponseInfo['http_code']) {
 
                 case 304 :
@@ -373,24 +383,32 @@ class YiiDropbox extends CApplicationComponent {
                     );
                     break;
                 case 400 :
-                    throw new CException('Forbidden. Bad input parameter. Error message should indicate which one and why.');
+                    $this->_errorMessage = 'Forbidden. Bad input parameter. Error message should indicate which one and why.';
+                    return false;
                 case 401 :
-                    throw new CException('Forbidden. Bad or expired token. This can happen if the user or Dropbox revoked or expired an access token. To fix, you should re-authenticate the user.');
+                    $this->_errorMessage = 'Forbidden. Bad or expired token. This can happen if the user or Dropbox revoked or expired an access token. To fix, you should re-authenticate the user.';
+                    return false;
                 case 403 :
-                    throw new CException('Forbidden. This could mean a bad OAuth request, or a file or folder already existing at the target location.');
+                    $this->_errorMessage = 'Forbidden. This could mean a bad OAuth request, or a file or folder already existing at the target location.';
+                    return false;
                 case 404 :
-                    throw new CException('Resource at uri: ' . $uri . ' could not be found');
+                    $this->_errorMessage = 'Resource at uri: ' . $uri . ' could not be found';
+                    return false;
                 case 405 :
-                    throw new CException('Forbidden. Request method not expected (generally should be GET or POST).');
+                    $this->_errorMessage = 'Forbidden. Request method not expected (generally should be GET or POST).';
+                    return false;
                 case 500 :
-                    throw new CException('Server error. ' . $e->getMessage());
+                    $this->_errorMessage = 'Server error. ' . $e->getMessage();
+                    return false;
                 case 503 :
-                    throw new CException('Forbidden. Your app is making too many requests and is being rate limited. 503s can trigger on a per-app or per-user basis.');
+                    $this->_errorMessage = 'Forbidden. Your app is making too many requests and is being rate limited. 503s can trigger on a per-app or per-user basis.';
+                    return false;
                 case 507 :
-                    throw new CException('This dropbox is full');
+                    $this->_errorMessage = 'This dropbox is full';
+                    return false;
                 default:
-                    // rethrowing
-                    throw $e;
+                    $this->_errorMessage = $e->getMessage();
+                    return false;
             }
 
         }
