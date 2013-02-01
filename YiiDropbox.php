@@ -9,7 +9,7 @@ class YiiDropbox extends CApplicationComponent {
 
     public $appKey;
     public $appSecret;
-    public $root = 'dropbox';
+    public $root;
 
     const URL_REQUEST_TOKEN = 'https://api.dropbox.com/1/oauth/request_token';
     const URL_ACCESS_TOKEN =  'https://api.dropbox.com/1/oauth/access_token';
@@ -290,7 +290,7 @@ class YiiDropbox extends CApplicationComponent {
     public function share($path, $root = null) {
         if (is_null($root)) $root = $this->root;
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
-        $response = $this->fetch($this->api_url.  'shares/'. $root . '/' . ltrim($path, '/'), array(), 'POST');
+        $response = $this->fetch(self::URL_API .  'shares/'. $root . '/' . ltrim($path, '/'), array(), 'POST');
         return json_decode($response['body'],true);
 
     }
@@ -311,7 +311,7 @@ class YiiDropbox extends CApplicationComponent {
 
     }
 
-    /** 
+    /**
      * @param type $path
      * @param type $root
      * @return type
