@@ -10,12 +10,14 @@ class YiiDropbox extends CApplicationComponent {
     public $appKey;
     public $appSecret;
     public $root;
+    public $chunkSize = 4194304;
 
     const URL_REQUEST_TOKEN = 'https://api.dropbox.com/1/oauth/request_token';
     const URL_ACCESS_TOKEN =  'https://api.dropbox.com/1/oauth/access_token';
     const URL_AUTHORIZE = 'https://www.dropbox.com/1/oauth/authorize';
     const URL_API = 'https://api.dropbox.com/1/';
     const API_CONTENT_URL = 'https://api-content.dropbox.com/1/';
+    const CONTENT_URL = 'https://api-content.dropbox.com/1/';
 
     /**
      * @var OAuth $_oauth
@@ -126,15 +128,61 @@ class YiiDropbox extends CApplicationComponent {
             $file = fopen($file,'rb');
 
         } elseif (!is_resource($file)) {
-            throw new CException('File must be a file-resource or a string');
+            $this->_errorCode = 1;
+            $this->_errorMessage = 'File must be a file-resource or a string';
+            return false;
         }
         $result=$this->multipartFetch(self::API_CONTENT_URL . 'files/' .
             $root . '/' . trim($directory,'/'), $file, $filename);
 
-        if(!isset($result["httpStatus"]) || $result["httpStatus"] != 200)
-            throw new CException("Uploading file to Dropbox failed");
+        if(!isset($result["httpStatus"]) || $result["httpStatus"] != 200) {
+            $this->_errorCode = 1;
+            $this->_errorMessage = 'Uploading file to Dropbox failed';
+            return false;
+        }
 
         return true;
+    }
+
+
+    /**
+     * Upload big file
+     * @param bool $filename
+     * @param $file
+     * @param null $root
+     * @return mixed
+     */
+    public function chunkedUpload($filename, $file, $root = null) {
+
+        $handle = fopen($file, 'rb');
+        fseek($handle, 0);
+
+        $arguments = array(
+            'upload_id' => '',
+            'offset' => 0,
+        );
+        while ($data = fread($handle, $this->chunkSize)) {
+
+            $url = self::CONTENT_URL . 'chunked_upload';
+            if ($arguments['offset'] > 0) {
+                $url .= '?' . http_build_query($arguments);
+            }
+            $result = $this->multipartFetch($url, $data, $filename, 'PUT', true);
+
+            $body = json_decode($result['body'], true);
+            $arguments['upload_id'] = isset($body['upload_id']) ? $body['upload_id'] : '';
+            $arguments['offset'] = isset($body['offset']) ? $body['offset'] : 0;
+            @fseek($handle, $arguments['offset']);
+
+        }
+
+        if (is_null($root)) {
+            $root = $this->root;
+        }
+        //fix upload
+        $commit = self::CONTENT_URL . 'commit_chunked_upload/' . $root . '/' . $filename . '?upload_id=' . $arguments['upload_id'];
+        $response = $this->oauth->fetch($commit, array(), 'POST');
+        return json_decode($response['body'],true);
     }
 
     /**
@@ -331,7 +379,7 @@ class YiiDropbox extends CApplicationComponent {
      * @param $filename
      * @return array
      */
-    protected function multipartFetch($uri, $file, $filename) {
+    protected function multipartFetch($uri, $file, $filename, $method = 'POST', $nowData = false) {
 
         $boundary = 'R50hrfBj5JYyfR3vF3wR96GPCC9Fd2q2pVMERvEaOE3D8LZTgLLbRpNwXek3';
 
@@ -343,13 +391,20 @@ class YiiDropbox extends CApplicationComponent {
         $body.="Content-Disposition: form-data; name=file; filename=".rawurldecode($filename)."\r\n";
         $body.="Content-type: application/octet-stream\r\n";
         $body.="\r\n";
-        $body.=stream_get_contents($file);
+        if ($nowData) {
+            $body .= $file;
+        }
+        else {
+            $body.=stream_get_contents($file);
+        }
         $body.="\r\n";
         $body.="--" . $boundary . "--";
 
-        $uri.='?file=' . $filename;
+        if ($method == 'POST') {
+            $uri.='?file=' . $filename;
+        }
 
-        return $this->fetch($uri, $body, 'POST', $headers);
+        return $this->fetch($uri, $body, $method, $headers);
 
     }
 
@@ -383,30 +438,39 @@ class YiiDropbox extends CApplicationComponent {
                     );
                     break;
                 case 400 :
+                    $this->_errorCode = 400;
                     $this->_errorMessage = 'Forbidden. Bad input parameter. Error message should indicate which one and why.';
                     return false;
                 case 401 :
+                    $this->_errorCode = 401;
                     $this->_errorMessage = 'Forbidden. Bad or expired token. This can happen if the user or Dropbox revoked or expired an access token. To fix, you should re-authenticate the user.';
                     return false;
                 case 403 :
+                    $this->_errorCode = 403;
                     $this->_errorMessage = 'Forbidden. This could mean a bad OAuth request, or a file or folder already existing at the target location.';
                     return false;
                 case 404 :
+                    $this->_errorCode = 404;
                     $this->_errorMessage = 'Resource at uri: ' . $uri . ' could not be found';
                     return false;
                 case 405 :
+                    $this->_errorCode = 405;
                     $this->_errorMessage = 'Forbidden. Request method not expected (generally should be GET or POST).';
                     return false;
                 case 500 :
+                    $this->_errorCode = 500;
                     $this->_errorMessage = 'Server error. ' . $e->getMessage();
                     return false;
                 case 503 :
+                    $this->_errorCode = 503;
                     $this->_errorMessage = 'Forbidden. Your app is making too many requests and is being rate limited. 503s can trigger on a per-app or per-user basis.';
                     return false;
                 case 507 :
+                    $this->_errorCode = 507;
                     $this->_errorMessage = 'This dropbox is full';
                     return false;
                 default:
+                    $this->_errorCode = 1;
                     $this->_errorMessage = $e->getMessage();
                     return false;
             }
