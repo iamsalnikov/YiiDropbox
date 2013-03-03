@@ -30,6 +30,11 @@ class YiiDropbox extends CApplicationComponent {
     protected $_errorCode;
     protected $_errorMessage;
 
+    /**
+     * Files information
+     */
+    protected $_files = array();
+
     public function init() {
         $this->_oauth = new OAuth($this->appKey, $this->appSecret, OAUTH_SIG_METHOD_HMACSHA1, OAUTH_AUTH_TYPE_URI);
         $this->_oauth->enableDebug();
@@ -81,7 +86,7 @@ class YiiDropbox extends CApplicationComponent {
      */
     public function getAccountInfo() {
         $data = $this->fetch(self::URL_API . 'account/info');
-        return json_decode($data['body'],true);
+        return $data ? json_decode($data['body'],true) : false;
     }
 
     /**
@@ -96,7 +101,7 @@ class YiiDropbox extends CApplicationComponent {
         if (!$root) $root = $this->root;
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $result = $this->fetch(self::API_CONTENT_URL . 'files/' . $root . '/' . ltrim($path,'/'));
-        return $result['body'];
+        return $result ? $result['body'] : false;
 
     }
 
@@ -135,6 +140,10 @@ class YiiDropbox extends CApplicationComponent {
         $result=$this->multipartFetch(self::API_CONTENT_URL . 'files/' .
             $root . '/' . trim($directory,'/'), $file, $filename);
 
+        if (!$result) {
+            return false;
+        }
+
         if(!isset($result["httpStatus"]) || $result["httpStatus"] != 200) {
             $this->_errorCode = 1;
             $this->_errorMessage = 'Uploading file to Dropbox failed';
@@ -169,6 +178,10 @@ class YiiDropbox extends CApplicationComponent {
             }
             $result = $this->multipartFetch($url, $data, $filename, 'PUT', true);
 
+            if (!$result) {
+                return false;
+            }
+
             $body = json_decode($result['body'], true);
             $arguments['upload_id'] = isset($body['upload_id']) ? $body['upload_id'] : '';
             $arguments['offset'] = isset($body['offset']) ? $body['offset'] : 0;
@@ -182,7 +195,7 @@ class YiiDropbox extends CApplicationComponent {
         //fix upload
         $commit = self::CONTENT_URL . 'commit_chunked_upload/' . $root . '/' . $filename . '?upload_id=' . $arguments['upload_id'];
         $response = $this->oauth->fetch($commit, array(), 'POST');
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
     }
 
     /**
@@ -198,7 +211,7 @@ class YiiDropbox extends CApplicationComponent {
         if (is_null($root)) $root = $this->root;
         $response = $this->fetch(self::URL_API . 'fileops/copy', array('from_path' => $from, 'to_path' => $to, 'root' => $root));
 
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -215,7 +228,7 @@ class YiiDropbox extends CApplicationComponent {
         $path = '/' . ltrim($path,'/');
 
         $response = $this->fetch(self::URL_API . 'fileops/create_folder', array('path' => $path, 'root' => $root),'POST');
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -230,7 +243,7 @@ class YiiDropbox extends CApplicationComponent {
 
         if (is_null($root)) $root = $this->root;
         $response = $this->fetch(self::URL_API . 'fileops/delete', array('path' => $path, 'root' => $root));
-        return json_decode($response['body']);
+        return $response ? json_decode($response['body']) : false;
 
     }
 
@@ -247,7 +260,7 @@ class YiiDropbox extends CApplicationComponent {
         if (is_null($root)) $root = $this->root;
         $response = $this->fetch(self::URL_API . 'fileops/move', array('from_path' => rawurldecode($from), 'to_path' => rawurldecode($to), 'root' => $root));
 
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -275,6 +288,9 @@ class YiiDropbox extends CApplicationComponent {
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $response = $this->fetch(self::URL_API . 'metadata/' . $root . '/' . ltrim($path,'/'), $args);
 
+        if (!$response) {
+            return false;
+        }
         /* 304 is not modified */
         if ($response['httpStatus']==304) {
             return true;
@@ -289,7 +305,7 @@ class YiiDropbox extends CApplicationComponent {
         $arg['cursor'] = $cursor;
 
         $response = $this->fetch(self::URL_API . 'delta', $arg, 'POST');
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -307,7 +323,7 @@ class YiiDropbox extends CApplicationComponent {
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $response = $this->fetch(self::URL_API . 'thumbnails/' . $root . '/' . ltrim($path,'/'),array('size' => $size));
 
-        return $response['body'];
+        return $response ? $response['body'] : false;
 
     }
 
@@ -325,7 +341,7 @@ class YiiDropbox extends CApplicationComponent {
             $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         }
         $response = $this->fetch(self::URL_API . 'search/' . $root . '/' . ltrim($path,'/'),array('query' => $query));
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
     }
 
     /**
@@ -339,7 +355,7 @@ class YiiDropbox extends CApplicationComponent {
         if (is_null($root)) $root = $this->root;
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $response = $this->fetch(self::URL_API .  'shares/'. $root . '/' . ltrim($path, '/'), array(), 'POST');
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -355,7 +371,7 @@ class YiiDropbox extends CApplicationComponent {
         if (is_null($root)) $root = $this->root;
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $response = $this->fetch(self::URL_API.  'media/'. $root . '/' . ltrim($path, '/'), array(), 'POST');
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
     }
 
@@ -369,8 +385,57 @@ class YiiDropbox extends CApplicationComponent {
         if (is_null($root)) $root = $this->root;
         $path = str_replace(array('%2F','~'), array('/','%7E'), rawurlencode($path));
         $response = $this->fetch(self::URL_API.  'copy_ref/'. $root . '/' . ltrim($path, '/'));
-        return json_decode($response['body'],true);
+        return $response ? json_decode($response['body'],true) : false;
 
+    }
+
+    /**
+     * Get size of file in bytes
+     * @param $file
+     * @param bool $fresh if true, get fresh info;
+     * @return int
+     */
+    public function fileSize($file, $fresh = false) {
+        if (!$fresh && isset($this->_files[$file]['bytes'])) {
+            return $this->_files[$file]['bytes'];
+        }
+
+        $data = $this->getMetaData($file);
+        $this->setFileInfo($file, $data);
+
+        return $this->_files[$file]['bytes'];
+    }
+
+    /**
+     * Check dir
+     * @param $file
+     * @param bool $fresh
+     * @return bool true - is dir
+     */
+    public function isDir($file, $fresh = false) {
+        if (!$fresh && isset($this->_files[$file]['isDir'])) {
+            return $this->_files[$file]['isDir'];
+        }
+
+        $data = $this->getMetaData($file);
+        $this->setFileInfo($file, $data);
+
+        return $this->_files[$file]['isDir'];
+    }
+
+    /**
+     * Set info about file
+     * @param $file
+     * @param $data
+     */
+    protected function setFileInfo($file, $data) {
+        $this->_files[$file] = array(
+            'isDir' => $data['is_dir'],
+            'path' => $data['path'],
+            'bytes' => $data['bytes'],
+            'revision' => $data['revision'],
+            'rev' => $data['rev'],
+        );
     }
 
     /**
@@ -426,7 +491,6 @@ class YiiDropbox extends CApplicationComponent {
                 'body'       => $result,
             );
         } catch (CException $e) {
-
             $lastResponseInfo = $this->_oauth->getLastResponseInfo();
             $this->_errorCode = $lastResponseInfo['http_code'];
             switch($lastResponseInfo['http_code']) {
