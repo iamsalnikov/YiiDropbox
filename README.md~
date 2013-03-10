@@ -52,37 +52,5 @@ In app config:
   ...
 ```
 
-### Support methods
-#### Get request token
-```php
-$dropbox->getRequestToken();
-```
-####  Set token
-```php
-$dropbox->setToken($oauthTokenSecret, $oauthToken = false);
-```
-
-First parameter may be String or Array. We can pass to this function at first parameter result of function `getRequestToken()` or `getAccessToken()`
-
-#### Get access token
-Function return array of access tokens. It's tokens we can save into databse and use user dropbox (after set its by `setToken()`
-```php
-$dropbox->getAccessToken()
-```
-
-#### Get authorize link
-This function return authorize link. By parameter `$callback` we can pass url of callback function, which be call after authorize application
-```php
-$dropbox->getAuthorizeLink($callback = false);
-```
-
-#### Get user account info
-```php
-$dropbox->getAccountInfo();
-```
-
-
-
-
 ### Links
 [Yii Example](http://iamsalnikov.ru/examples/dropboxConnect)
