@@ -3,6 +3,7 @@
  * Yii Extension provide Dropbox API
  *
  * @author Alexey Salnikov <http://iamsalnikov.ru/>
+ * @author Joe Constant <http://joeconstant.me/>
  */
 class YiiDropbox extends CApplicationComponent {
 
@@ -400,12 +401,8 @@ class YiiDropbox extends CApplicationComponent {
         }
 
         $data = $this->getMetaData($file);
-
-        if (!$data) {
-            return false;
-        }
-
         $this->setFileInfo($file, $data);
+
         return $this->_files[$file]['bytes'];
     }
 
@@ -421,39 +418,9 @@ class YiiDropbox extends CApplicationComponent {
         }
 
         $data = $this->getMetaData($file);
-        if (!$data) {
-            return false;
-        }
-
         $this->setFileInfo($file, $data);
+
         return $this->_files[$file]['isDir'];
-    }
-
-    /**
-     * @param $file
-     * @param bool $fresh
-     * @return bool
-     */
-    public function fileExists($file, $fresh = false) {
-        if (!$fresh) {
-            return isset($this->_files[$file]);
-        }
-
-        $data = $this->getMetaData($file);
-        if (!$data) {
-            return false;
-        }
-
-        $this->setFileInfo($file, $data);
-        return true;
-    }
-
-    /**
-     * Check errors;
-     * @return bool
-     */
-    public function hasError() {
-        return $this->_errorCode ? true : false;
     }
 
     /**
@@ -519,16 +486,14 @@ class YiiDropbox extends CApplicationComponent {
             $this->_oauth->fetch($uri, $arguments, $method, $httpHeaders);
             $result = $this->_oauth->getLastResponse();
             $lastResponseInfo = $this->_oauth->getLastResponseInfo();
-            $this->_errorCode = 0;
-            $this->_errorMessage = '';
             return array(
                 'httpStatus' => $lastResponseInfo['http_code'],
                 'body'       => $result,
             );
-        } catch (Exception $e) {
+        } catch (CException $e) {
             $lastResponseInfo = $this->_oauth->getLastResponseInfo();
             $this->_errorCode = $lastResponseInfo['http_code'];
-            switch($this->_errorCode) {
+            switch($lastResponseInfo['http_code']) {
 
                 case 304 :
                     return array(
