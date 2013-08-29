@@ -52,5 +52,3 @@ In app config:
   ...
 ```
 
-### Links
-[Yii Example](http://iamsalnikov.ru/examples/dropboxConnect)
